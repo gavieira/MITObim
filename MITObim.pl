@@ -27,6 +27,7 @@ my $shme = "";
 my $trim_off = "";
 my $redirect_temp = "";
 my $NFS_warn_only = "";
+my $kmer = 39;
 my ($mirapath, $mira, $miraconvert, $mirabait) = ("", "mira", "miraconvert", "mirabait");
 my (@reads, @output, @path, @current_contig_stats, @contiglengths, @number_of_reads, @number_of_contigs);
 my %hash;
@@ -52,6 +53,7 @@ my $USAGE = 	"\nusage: ./MITObim.pl <parameters>
 		--pair			extend readpool to contain full read pairs, even if only one member was baited (relies on /1 and /2 header convention for read pairs) (default: no).
 		--verbose		show detailed output of MIRA modules (default: no)
 		--split			split reference at positions with more than 5N (default: no)
+		--kmer			kmer value used in mira assembly (default: 39)
 		--help			shows this helpful information
 		--clean                 retain only the last 2 iteration directories (default: no)
 		--trimreads		trim data (default: no; we recommend to trim beforehand and feed MITObim with pre trimmed data)
@@ -101,6 +103,7 @@ GetOptions (	"start=i" => \$startiteration,
 #		"readlength=i" => \$readlength,
 #		"insertsize=i" => \$insertsize,
 		"split!"	=>	\$splitting,
+		"kmer=i"	=>	\$kmer,
 		"min_cov=i"	=>	\$min_contig_cov,
 		"min_len=i"	=>	\$min_contig_len,
 		"redirect_tmp=s" =>	\$redirect_temp,
@@ -343,8 +346,8 @@ foreach (@iteration){
 	unlink("list");
 	
 	MIRA:
-	print "\nrunning $miramode assembly using MIRA\n\n";
-	&create_manifest($currentiteration,$strainname,$refname,$miramode,$trim_off,$platform_settings,$shme,$paired,$trimoverhang,"$strainname-readpool-it$currentiteration.fastq","backbone_it$currentiteration\_initial_$refname.fna", $redirect_temp, $NFS_warn_only);
+	print "\nrunning $miramode assembly using MIRA (kmer = $kmer)\n\n";
+	&create_manifest($currentiteration,$strainname,$refname,$miramode,$trim_off,$platform_settings,$shme,$paired,$trimoverhang,"$strainname-readpool-it$currentiteration.fastq","backbone_it$currentiteration\_initial_$refname.fna", $redirect_temp, $NFS_warn_only, $kmer);
 	@output = qx($mira manifest.conf ); 
 
 	$exit = $? >> 8;
@@ -380,7 +383,7 @@ foreach (@iteration){
                 move ("$strainname-$refname\_assembly", "$strainname-$refname-se_assembly");
 
 		# extract the backbone for second assembly pass
-                &create_manifest($currentiteration,$strainname, $refname, $miramode, $trim_off, $platform_settings, $shme, $paired, $trimoverhang, "$strainname-readpool-it$currentiteration.fastq", "backbone_it$currentiteration\_$refname-pe.fna", $redirect_temp, $NFS_warn_only);
+                &create_manifest($currentiteration,$strainname, $refname, $miramode, $trim_off, $platform_settings, $shme, $paired, $trimoverhang, "$strainname-readpool-it$currentiteration.fastq", "backbone_it$currentiteration\_$refname-pe.fna", $redirect_temp, $NFS_warn_only, $kmer);
 
                 # running MIRA
                 print "\nre-running $miramode assembly using MIRA\n\n";
@@ -1018,7 +1021,7 @@ sub finalize_sequence{
 }
 
 sub create_manifest {
-	my ($iter, $sampleID, $refID, $mmode, $trim, $platform, $solexa_mismatches, $pair, $overhang, $reads, $ref, $redirect, $NFS_warn);
+	my ($iter, $sampleID, $refID, $mmode, $trim, $platform, $solexa_mismatches, $pair, $overhang, $reads, $ref, $redirect, $NFS_warn, $kmer);
 	$iter = $_[0];
 	$sampleID = $_[1];
 	$refID = $_[2];
@@ -1032,6 +1035,7 @@ sub create_manifest {
 	$ref = $_[10];
 	$redirect = $_[11];
 	$NFS_warn = $_[12];
+	$kmer = $_[13];
 
 	if ($NFS_warn){
 		$NFS_warn = ":cnfs=warn"
@@ -1040,7 +1044,7 @@ sub create_manifest {
 	open (MANIFEST,">manifest.conf") or die $!;
 	print MANIFEST "#manifest file for iteration $iter created by MITObim\n\nproject = $sampleID-$refID
 	\njob = genome,$mmode,accurate
-	\nparameters = -NW:mrnl=0:cac=warn$NFS_warn -AS:nop=1 $redirect $overhang $platform $trim -CO:msr=no $solexa_mismatches\n";
+	\nparameters = -NW:mrnl=0:cac=warn$NFS_warn -AS:nop=1 -SK:bph=$kmer $redirect $overhang $platform $trim -CO:msr=no $solexa_mismatches\n"; #GABE
 	my @technology = split("_",$platform);
 	#-notraceinfo -
 	if ($mmode eq "mapping"){
